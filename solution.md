@@ -145,3 +145,70 @@ SELECT
 Низкая доля активных пользователей (pct_active_users) говорит о том, что базовый функционал должен оставаться бесплатным.
 Если среднее число попыток на задачу >1, то подсказки/решения востребованы – их можно включить в подписку.
 Самые популярные покупки за монеты – вероятно, решения и подсказки. Их стоит сделать платными.
+
+#### Дополнительное задание
+
+ 1. Retention по действиям (решение задачи vs просмотр решения)
+Поможет понять, какой контент удерживает пользователей лучше.
+```sql
+WITH action_retention AS (
+    SELECT 
+        u.id,
+        u.date_joined,
+        CASE WHEN cs.user_id IS NOT NULL THEN 1 ELSE 0 END AS solved_task,
+        CASE WHEN t.user_id IS NOT NULL AND tt.type IN (списания) AND tt.name LIKE '%решение%' THEN 1 ELSE 0 END AS bought_solution
+    FROM users u
+    LEFT JOIN codesubmit cs ON u.id = cs.user_id AND cs.is_false=0
+    LEFT JOIN transaction t ON u.id = t.user_id
+    LEFT JOIN transactiontype tt ON t.type_id = tt.id
+    GROUP BY u.id
+)
+SELECT 
+    AVG(solved_task) AS pct_solved,
+    AVG(bought_solution) AS pct_bought_solution
+FROM action_retention;
+```
+
+ 2. Время до первой покупки (медиана)
+Показывает, через сколько дней пользователи готовы платить. Определяет длительность пробного периода.
+```sql
+WITH first_purchase AS (
+    SELECT 
+        user_id,
+        MIN(t.date) AS first_buy_date,
+        u.date_joined
+    FROM transaction t
+    JOIN transactiontype tt ON t.type_id = tt.id
+    JOIN users u ON t.user_id = u.id
+    WHERE tt.type IN (1,23,24,25,26,27,28,30)
+    GROUP BY user_id, u.date_joined
+)
+SELECT 
+    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY (first_buy_date - date_joined)) AS median_days_to_purchase
+FROM first_purchase;
+```
+ 3. LTV (Lifetime Value) пользователя
+Суммарный доход от пользователя за всё время. Поможет определить, сколько можно тратить на привлечение.
+```sql
+SELECT 
+    user_id,
+    SUM(amount) AS ltv
+FROM transaction t
+JOIN transactiontype tt ON t.type_id = tt.id
+WHERE tt.type IN (1,23,24,25,26,27,28,30)
+GROUP BY user_id;
+```
+Почему это полезно:
+- Позволяет сегментировать пользователей по готовности платить.
+- Определяет оптимальную цену подписки (не выше среднего LTV за период).
+- Даёт понимание, сколько нужно удерживать пользователя, чтобы окупить маркетинг.
+
+Выводы:
+
+#### Итоговые выводы по смене модели монетизации
+Рекомендации:
+Сроки подписки: неделя (для новых) и месяц/год (для постоянных). Retention резко падает после 14–30 дней, поэтому длинные подписки должны быть со скидкой.
+Стоимость: ориентироваться на средние ежемесячные списания (например, 100–300 руб. при курсе 1 Coin = 1 руб.). Годовая подписка – скидка 30–50%.
+Состав подписки: Бесплатно: базовые задачи, ограниченное число попыток, открытые тесты.
+Платно: решения задач, подсказки, продвинутые тесты, задачи от компаний, неограниченные попытки.
+Почему: большинство пользователей не покупают монеты, но готовы платить за удобство. Подписка снижает барьер входа и увеличивает LTV.
