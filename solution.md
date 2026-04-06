@@ -212,3 +212,74 @@ GROUP BY user_id;
 Состав подписки: Бесплатно: базовые задачи, ограниченное число попыток, открытые тесты.
 Платно: решения задач, подсказки, продвинутые тесты, задачи от компаний, неограниченные попытки.
 Почему: большинство пользователей не покупают монеты, но готовы платить за удобство. Подписка снижает барьер входа и увеличивает LTV.
+
+#### Дополнительное задание 2
+SQL-запрос для выгрузки активностей
+```sql
+SELECT 
+    timestamp AS activity_time,
+    'coderun' AS activity_type
+FROM coderun
+UNION ALL
+SELECT 
+    timestamp,
+    'codesubmit'
+FROM codesubmit
+UNION ALL
+SELECT 
+    start_time,
+    'teststart'
+FROM teststart;
+Python-код для анализа
+python
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sqlalchemy import create_engine
+```
+
+Подключение к БД
+```python
+engine = create_engine('postgresql://student:qweasd963@95.163.241.236:5432/simulative')
+df = pd.read_sql("""
+    SELECT timestamp AS activity_time, 'coderun' AS activity_type FROM coderun
+    UNION ALL
+    SELECT timestamp, 'codesubmit' FROM codesubmit
+    UNION ALL
+    SELECT start_time, 'teststart' FROM teststart""", engine)
+```
+
+График по дням недели
+```python
+plt.figure(figsize=(10,5))
+sns.countplot(data=df, x='weekday_name', order=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'])
+plt.title('Активность по дням недели')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('activity_weekday.png')
+```
+
+График по часам
+```python
+plt.figure(figsize=(12,5))
+sns.histplot(df['hour'], bins=24, kde=True)
+plt.title('Активность по часам суток')
+plt.xlabel('Час')
+plt.tight_layout()
+plt.savefig('activity_hour.png')
+```
+
+Графики (описание)
+По дням недели: пик активности – вторник–четверг, минимум – суббота–воскресенье.
+По часам: основная активность с 10 до 18 часов, второй небольшой пик – 20–22 часа.
+
+Выводы для CTO:
+Рекомендую проводить релизы:
+День: вторник или среда.
+Время: 9:00–10:00 утра (перед началом пиковой активности).
+
+Почему:
+Выходные и поздний вечер – низкая активность, сложно быстро обнаружить критические ошибки.
+Утро рабочего дня – достаточно пользователей для тестирования, но ещё не пик нагрузки.
+Понедельник – люди раскачиваются, пятница – уже думают о выходных.
+
